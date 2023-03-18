@@ -182,7 +182,6 @@ def load_blob_into_memory(blob_name):
     container_name = get_env_vars()['container_name']
     resource_group_name = get_env_vars()['resource_group_name']
     
-
     if storage_account_name is None or container_name is None or resource_group_name is None:
         raise Exception("Missing environment variables")
     else:
@@ -197,42 +196,32 @@ def load_blob_into_memory(blob_name):
             blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)         
             # Download blob data
             blob_data = blob_client.download_blob().content_as_bytes()    
-            print(f"Successfully downloaded blob: {blob_name}")
             return blob_data
         except Exception as e:
             print(f"Error downloading blob: {e}")
 
 # Extract text from a PDF file
 def tika_parser(blob_data):
-    """ extract text from a pdf blob with tika parser
-        use pdfplumber as a fallback if tika fails
-    """
-    
     try:
         with io.BytesIO(blob_data) as pdf_file:
             # Try to extract text using Tika parser
-            print("first try tika parser")
             try:
-                print(pdf_file)
                 parsed_pdf = parser.from_buffer(pdf_file)
                 text = parsed_pdf['content']
-                print(text)
                 print(f"Successfully extracted {len(text)} characters from PDF using Tika")
                 return text
-            except Exception as e:
-                print(f"Error extracting text from PDF using Tika: {e}")
+            except:
                 pass
 
             # If Tika fails, try to extract text using pdfplumber
             try:
-                print("second try pdfplumber")
                 with pdfplumber.load(pdf_file) as pdf:
                     pages = pdf.pages
                     text = "\n".join([page.extract_text() for page in pages])
                     print(f"Successfully extracted {len(text)} characters from PDF using pdfplumber")
                     return text
-            except Exception as e:
-                print(f"Error extracting text from PDF using pdfplumber: {e}")                
+            except:
+                
                 pass
 
             # If both Tika and pdfplumber fail, return None
@@ -244,8 +233,108 @@ def tika_parser(blob_data):
 
 
 
-# Extract text from a PDF file
-def preprocess_text(text):
-    # Replace any non-UTF-8 characters with a space
-    text = re.sub(r'[^\x00-\x7F]+', ' ', text)
-    return text.strip()
+def chatgpt3 (userinput, temperature=0.7, frequency_penalty=0, presence_penalty=0):
+    """ chat with gpt-3.5-turbo, the much cheaper version of gpt-3"""
+    
+    suffix = "\n\nTl;dr"
+    prompt = userinput+suffix
+    assistant_prompt =""
+    message = [
+        {"role": "user", "content": prompt },        
+        {"role": "system", "content": "you are a helpful distinguished scholarly assistant that uses efficient \
+         communication to help finish the task of concisely summarizing an article by summarizing the most pertinent essence of the text as part of a paragraph. \
+         use the fewest words as possible in english"}
+         ]
+    openai.api_key = get_env_vars()['OPENAI_API_KEY']
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        temperature=temperature,
+        frequency_penalty=frequency_penalty,
+        presence_penalty=presence_penalty,
+        messages=message
+    )
+    text = response['choices'][0]['message']['content']
+    return text
+
+def cheaper_summarizer(text, title,temperature=0.7, frequency_penalty=0, presence_penalty=0,api_key=None):
+    """ chat with gpt-3.5-turbo, the much cheaper version of gpt-3"""        
+    
+    if text is None:
+        print(f"there is no text to summarize - Skipping {title}")
+        return ''
+    else:
+        try:
+            print(f"Summarizing {title} for {len(text)} characters")
+            #split text into chunks
+            chunks = split_text(text)
+            max_retry = 3
+            retry = 0
+            while retry < max_retry:
+                try:
+                    summaries = ' \n'.join([chatgpt3(chunk, temperature=temperature, frequency_penalty=frequency_penalty, presence_penalty=presence_penalty) for chunk in chunks])
+                    break
+                except Exception as e:
+                    print(f"Exception: {e} - Retrying {title}") 
+                    retry += 1
+                    sleep(5)
+                    continue                
+            return summaries
+        except Exception as e:
+            print(f"Exception: {e} - Skipping {title}")
+            return ''
+   
+                            
+    
+
+     
+def create_id(folder, typeofDoc, subject, author, title):
+    """ create id field for cosmos db """
+    # create a string to hash
+    my_string = f"{folder}{typeofDoc}{subject}{author}{title}"
+    # create a hash object using the SHA-256 algorithm
+    hash_object = hashlib.sha256()
+    # update the hash object with the string to be hashed
+    hash_object.update(my_string.encode())
+    # get the hexadecimal representation of the hash
+    hex_dig = hash_object.hexdigest()
+    return hex_dig
+
+######################    VECTOR DATABASE DATA LOADING     ###############################
+def split_text(text: str):
+    """ split text into chunks"""
+    text_splitter = CharacterTextSplitter()
+    chunks = text_splitter.split_text(text)
+    return chunks
+
+ 
+def get_embedding(text, model="text-embedding-ada-002"):
+    """ get embedding from openai"""
+    openai.api_key = get_env_vars()['OPENAI_API_KEY']
+    text = text.replace("\n"," ")
+    return openai.Embedding.create(input = [text], model=model)['data'][0]['embedding']
+
+def get_pincone_pdfdata( text,metadata):    
+    """ get pinecone pdf data"""
+    #create list of vectors
+    chunks = split_text(text)   
+    
+    #create list of pinecone documents
+    pinecone_docs = [{"id": hashlib.sha256(item.encode()).hexdigest(),
+                        "values": [get_embedding(item )],
+                        "metadata": metadata
+                         } for item in chunks]  
+    return pinecone_docs
+
+def upsert_pinecone_data(vector):
+    """ upsert pinecone data"""
+    """ upsert pinecone index with pdf data"""
+    pinecone.apiKey = get_pinecone_keys()['pinecone.apiKey']
+    pinecone.environment = get_pinecone_keys()['pinecone.environment']
+    pinecone.indexName = get_pinecone_keys()['pinecone.indexName']
+    pinecone.projectName = get_pinecone_keys()['pinecone.projectName']
+    
+    #initialize pinecone
+    pinecone.init(api_key=pinecone.apiKey, env=pinecone.environment)
+    
+    index = pinecone.Index(pinecone.indexName)
+    return index.upsert(vector , namespace=pinecone.projectName)
