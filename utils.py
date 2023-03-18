@@ -172,6 +172,13 @@ def extract_title(pdf_path):
     lst = pdf_path.replace('..','').split('/')[1:]
     return lst
 
+# Extract text from a PDF file
+def preprocess_text(text):
+    # Replace any non-UTF-8 characters with a space
+    text = re.sub(r'[^\x00-\x7F]+', ' ', text)
+    return text.strip()
+
+
 
 # Extract text from a PDF file
 def load_blob_into_memory(blob_name):
@@ -325,6 +332,9 @@ def get_pincone_pdfdata( text,metadata):
                          } for item in chunks]  
     return pinecone_docs
 
+
+######################    UPLOAD DATA     ###############################
+
 def upsert_pinecone_data(vector):
     """ upsert pinecone data"""
     """ upsert pinecone index with pdf data"""
@@ -338,3 +348,19 @@ def upsert_pinecone_data(vector):
     
     index = pinecone.Index(pinecone.indexName)
     return index.upsert(vector , namespace=pinecone.projectName)
+
+def write_to_cosmosdb(items):
+    
+    resource_group_name =  os.environ.get('resource_group_name')
+    cosmosdb_acc =         os.environ.get('cosmosdb_acc')
+    database_name =        os.environ.get('database_name')
+    collection_name =      os.environ.get('collection_name')
+    connecting_string = os.popen(f"az cosmosdb keys list --type connection-strings --resource-group {resource_group_name}\
+                              --name {cosmosdb_acc} | jq '.connectionStrings[0].connectionString' ").read().strip().replace('"','')
+    
+    mongo_client = MongoClient(connecting_string)
+    collection = mongo_client[database_name][collection_name]
+
+    for item in items:
+        print(item['summary'])
+        collection.update_one({"id": item["id"]}, {"$set": item}, upsert=True)
