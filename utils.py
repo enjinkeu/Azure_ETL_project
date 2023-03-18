@@ -178,7 +178,19 @@ def preprocess_text(text):
     text = re.sub(r'[^\x00-\x7F]+', ' ', text)
     return text.strip()
 
-
+def extract_text_from_container( list_of_pdf_uploaded =[]):
+    print("get environment variables")
+    storage_account_name = get_env_vars()['storage_account_name']
+    container_name = get_env_vars()['container_name']
+    resource_group_name = get_env_vars()['resource_group_name'] 
+    storage_connection_string = os.popen(f"az storage account show-connection-string -g {resource_group_name} -n {storage_account_name} --query connectionString").read().strip()
+    blob_service_client = BlobServiceClient.from_connection_string(storage_connection_string)
+    container_client = blob_service_client.get_container_client(container_name)
+    return [(item.name,tika_parser(BlobServiceClient.from_connection_string(storage_connection_string).get_blob_client(container=container_name,blob= item.name).download_blob().content_as_bytes()))\
+                for item in \
+                ContainerClient.from_connection_string(conn_str=storage_connection_string, container_name=container_name).list_blobs()  \
+                if item.name not in list_of_pdf_uploaded]
+                
 
 # Extract text from a PDF file
 def load_blob_into_memory(blob_name):
@@ -187,7 +199,9 @@ def load_blob_into_memory(blob_name):
     print("get environment variables")
     storage_account_name = get_env_vars()['storage_account_name']
     container_name = get_env_vars()['container_name']
-    resource_group_name = get_env_vars()['resource_group_name']
+    resource_group_name = get_env_vars()['resource_group_name']    
+    storage_connection_string = os.popen(f"az storage account show-connection-string -g {resource_group_name} -n {storage_account_name} --query connectionString").read().strip()
+
     
     if storage_account_name is None or container_name is None or resource_group_name is None:
         raise Exception("Missing environment variables")
@@ -200,10 +214,18 @@ def load_blob_into_memory(blob_name):
             # Create blob service client
             blob_service_client = BlobServiceClient.from_connection_string(storage_connection_string)
             # Get blob client
-            blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)         
-            # Download blob data
-            blob_data = blob_client.download_blob().content_as_bytes()    
-            return blob_data
+            blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)     
+            
+            # Check if blob exists
+            if blob_client.exists():
+                # Download blob data
+                blob_data = blob_client.download_blob().content_as_bytes()    
+                print(f"Successfully downloaded blob: {blob_client.blob_name}")
+                return blob_data
+            else:
+                print(f"Blob {blob_client.blob_name} does not exist")   
+               
+            
         except Exception as e:
             print(f"Error downloading blob: {e}")
 

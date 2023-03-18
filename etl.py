@@ -18,6 +18,7 @@ def main():
     os.environ['storage_account_name'] = 'chatgptv2stn'
     os.environ['container_name'] = 'chatgpt-ctn'
     os.environ['resource_group_name'] ='chatgptGp'
+    
     os.environ['cosmosdb_acc'] ='chatgptdb-acn'
     os.environ['database_name']='chatgptdb-dbn'
     os.environ['collection_name']='chatgptdb-cln'    
@@ -44,12 +45,12 @@ def main():
         print(pdf_paths)        
         
         print("create the cosmosdb rdd")
-        preprocess_text_rdd = spark.sparkContext.parallelize(pdf_paths[0])\
-                                            .map(lambda x: (x, preprocess_text(tika_parser(load_blob_into_memory(x)))))
-                                            
-                                            
-                                            
-        cosmos_rdd_dict = preprocess_text_rdd.map(lambda x: {
+
+        preprocess_text_list =  spark.sparkContext.parallelize(extract_text_from_container()).collect()
+
+        
+        preprocess_rdd = spark.sparkContext.parallelize(preprocess_text_list).map(lambda x: (x[0], preprocess_text(x[1]))).\
+                                        map(lambda x: {
                                                 "Filepath": x[0],
                                                 "Metadata": {
                                                     "folder": extract_title(x[0])[0],
@@ -69,7 +70,32 @@ def main():
                                                 ),
                                                 "uploadDate": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                                             }).foreachPartition(lambda x: write_to_cosmosdb(x))
-       
+        # preprocess_text_rdd.persist()    
+
+        # preprocess_text_rdd.collect(                                
+                                            
+        # cosmos_rdd_dict = preprocess_text_rdd.map(lambda x: {
+        #                                         "Filepath": x[0],
+        #                                         "Metadata": {
+        #                                             "folder": extract_title(x[0])[0],
+        #                                             "typeofDoc": extract_title(x[0])[1],
+        #                                             "subject": extract_title(x[0])[2],
+        #                                             "author": extract_title(x[0])[3],
+        #                                             "title": extract_title(x[0])[4].split('.')[0]
+        #                                         },
+        #                                         "text": x[1],
+        #                                         "summary": cheaper_summarizer(x[1], extract_title(x[0])),
+        #                                         "id": create_id(
+        #                                             extract_title(x[0])[0],  # folder
+        #                                             extract_title(x[0])[1],  # typeofDoc
+        #                                             extract_title(x[0])[2],  # subject
+        #                                             extract_title(x[0])[3],  # author
+        #                                             extract_title(x[0])[4].split('.')[0],  # title
+        #                                         ),
+        #                                         "uploadDate": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                            #})#\
+                                               # .foreachPartition(lambda x: write_to_cosmosdb(x))
+      
 
         print("create the pinecone rdd and write to pinecone")
         pinecone_rdd = preprocess_text_rdd\
