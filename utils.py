@@ -37,6 +37,26 @@ def cli_signIn():
 
 ######################    SECRETS       ###############################
 
+def get_env_vars():
+    """ get environment variables from azure""" 
+  
+    env_dict = {
+        "resource_group_name": 'chatgptGp',
+        "storage_account_name": 'chatgptv2stn',
+        "container_name": 'chatgpt-ctn',
+        "cosmosdb_acc": 'chatgptdb-acn',
+        "database_name": 'chatgptdb-dbn',
+        "collection_name": 'chatgptdb-cln' ,
+        "OPENAI_API_KEY": get_secret(keyvault_name="chatkeys",secret_name="openaiKey"),
+        "connection_string": os.popen(f"az cosmosdb keys list --type connection-strings --resource-group 'chatgptGp'\
+                              --name chatgptdb-acn | jq .connectionStrings[0].connectionString ").read().strip().replace('"',''),
+    }   
+    for k, v in env_dict.items():
+        if v is None:
+            raise Exception(f"{k} environment variable is not set")
+    return env_dict
+
+
 def get_secret(keyvault_name ="chatkeys", secret_name = "openaiKey"):
     """Get secret from Azure Key Vault"""
     credential = DefaultAzureCredential()
@@ -54,8 +74,7 @@ def get_pinecone_keys():
         "pinecone.apiKey": pinecone_api_key,
         "pinecone.environment": pinecone_env,
         "pinecone.indexName": pinecone_index,
-        "pinecone.projectName": "chatgpt3"
-        
+        "pinecone.projectName": "chatgpt3"        
     }
         
 def get_cosmosdb_keys():
@@ -64,7 +83,6 @@ def get_cosmosdb_keys():
     
     resourceGroup = get_env_vars()['resource_group_name']
     cosmosdb_name = get_env_vars()['cosmosdb_acc']
-
     cosmosDbEndpoint_url = os.popen(f"az cosmosdb show --resource-group {resourceGroup}  --name {cosmosdb_name} --query 'writeLocations[].documentEndpoint' -o tsv").read().strip()
     cosmos_account_key =   os.popen(f"az cosmosdb keys  list --name {cosmosdb_name} --resource-group {resourceGroup} | jq -r '.primaryMasterKey'").read().strip()    
     database_name =        os.popen(f"az cosmosdb database list --name {cosmosdb_name} --resource-group {resourceGroup} | jq -r '.[0].id'").read().strip()
@@ -111,22 +129,6 @@ def set_spark_liraries():
         pkg2 = f"{group_id}:{artifact_id}:{version}"
 
         return pkg1, pkg2
-
-def get_env_vars():
-    env_dict = {
-        "resource_group_name": os.environ['resource_group_name'],
-        "storage_account_name": os.environ['storage_account_name'],
-        "container_name": os.environ['container_name'],
-        "cosmosdb_acc": os.environ['cosmosdb_acc'],
-        "database_name": os.environ['database_name'],
-        "collection_name": os.environ['collection_name'],
-        "OPENAI_API_KEY": os.environ['OPENAI_API_KEY'],
-        "connection_string": os.environ['connection_string'],
-    }   
-    for k, v in env_dict.items():
-        if v is None:
-            raise Exception(f"{k} environment variable is not set")
-    return env_dict
 
 
 ######################    FILE MANAGEMENT       ###############################
