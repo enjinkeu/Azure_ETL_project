@@ -58,28 +58,40 @@ def get_pinecone_keys():
         
     }
         
-def get_cosmosdb_keys(resourceGroup,cosmosdb_name):
+def get_cosmosdb_keys():
     """ get cosmos db keys from azure"""
     #create environment variables  
+    
+    resourceGroup = get_env_vars()['resource_group_name']
+    cosmosdb_name = get_env_vars()['cosmosdb_acc']
+
     cosmosDbEndpoint_url = os.popen(f"az cosmosdb show --resource-group {resourceGroup}  --name {cosmosdb_name} --query 'writeLocations[].documentEndpoint' -o tsv").read().strip()
     cosmos_account_key =   os.popen(f"az cosmosdb keys  list --name {cosmosdb_name} --resource-group {resourceGroup} | jq -r '.primaryMasterKey'").read().strip()    
     database_name =        os.popen(f"az cosmosdb database list --name {cosmosdb_name} --resource-group {resourceGroup} | jq -r '.[0].id'").read().strip()
     collection_name =       os.popen(f"az cosmosdb collection list --name {cosmosdb_name} --db-name {database_name} --resource-group {resourceGroup} | jq -r '.[0].id'").read().strip()
     masterkey =            os.popen(f" az cosmosdb list-keys --name {cosmosdb_name} --resource-group {resourceGroup} --query primaryMasterKey").read().strip()
     connection_string =    os.popen(f"az cosmosdb keys list --type connection-strings --resource-group {resourceGroup}\
-                              --name {cosmosdb_name} | jq '.connectionStrings[0].connectionString' ").read().strip().replace('"','')
+                            --name {cosmosdb_name} | jq '.connectionStrings[0].connectionString' ").read().strip().replace('"','')
     
     return {
-        
-        "cosmosDbEndpoint_url" : cosmosDbEndpoint_url,
-        "masterkey" : masterkey,
-        "database_name" : database_name,
-        "collection_name" : collection_name,
-        "connection_string" : connection_string
-    }
+            
+            "cosmosDbEndpoint_url" : cosmosDbEndpoint_url,
+            "masterkey" : masterkey,
+            "database_name" : database_name,
+            "collection_name" : collection_name,
+            "connection_string" : connection_string
+        }
 
 def list_filepaths_in_cosmosdb_container():
-    client = pymongo.MongoClient(os.environ['connections_string'])
+    print("getting filepaths from cosmosdb")   
+    """ get cosmos db keys from azure"""
+    resource_group_name = get_env_vars()['resource_group_name']
+    cosmosdb_acc = get_env_vars()['cosmosdb_acc']
+    database_name = get_env_vars()['database_name']
+    collection_name = get_env_vars()['collection_name'] 
+    client = pymongo.MongoClient(os.environ['connection_string'])
+    connecting_string = os.popen(f"az cosmosdb keys list --type connection-strings --resource-group {resource_group_name}\
+                              --name {cosmosdb_acc} | jq .connectionStrings[0].connectionString ").read().strip().replace('"','')
     collection_client = client.get_database(os.environ['database_name']).get_collection(os.environ['collection_name'])
     list = [item['Filepath'] for item in collection_client.find()]
     return list
@@ -109,7 +121,8 @@ def get_env_vars():
         "database_name": os.environ['database_name'],
         "collection_name": os.environ['collection_name'],
         "OPENAI_API_KEY": os.environ['OPENAI_API_KEY'],
-    }
+        "connection_string": os.environ['connection_string'],
+    }   
     for k, v in env_dict.items():
         if v is None:
             raise Exception(f"{k} environment variable is not set")
@@ -133,7 +146,7 @@ def list_pdfblobs():
     resource_group_name = get_env_vars()['resource_group_name']
     container_name = get_env_vars()['container_name']
     """list pdf blobs in blob storage"""
-    list_of_uploaded_files = [item['Filepath'] for item in get_cosmosdb_uploaded_files().find({})]
+    list_of_uploaded_files = [item['Filepath'] for item in list_filepaths_in_cosmosdb_container()]
     storage_account_key = os.popen(f"az storage account keys list -n {storage_account_name} -g {resource_group_name} --query [0].value -o tsv").read().strip()
     storage_connection_string = os.popen(f"az storage account show-connection-string -g {resource_group_name} -n {storage_account_name} --query connectionString").read().strip()  
     container = ContainerClient.from_connection_string(conn_str=storage_connection_string, container_name=container_name)
@@ -154,7 +167,7 @@ def delete_cosmosdb_uploaded_files():
 
     connecting_string = os.popen(f"az cosmosdb keys list --type connection-strings --resource-group {resource_group_name}\
                               --name {cosmosdb_acc} | jq .connectionStrings[0].connectionString ").read().strip().replace('"','')
-    collection_name = MongoClient(connecting_string)[database_name][collection_name]
+    collection_name = pymongo.MongoClient(connecting_string)[database_name][collection_name]
     
     return collection_name.delete_many({})
 

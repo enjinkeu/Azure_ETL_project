@@ -9,21 +9,22 @@ def main():
     #set variables to be used in this ETL process
 
     print("set environment variables")
-    os.environ['OPENAI_API_KEY'] = get_secret("chatKeys", "openaiKey")     
-    pinecone_dict = get_pinecone_keys()
-    pinecone_jar, cosmos_jar = set_spark_liraries()
-    cosmos_dict = get_cosmosdb_keys(resourceGroup = "chatgptGp",cosmosdb_name="chatgptdb-acn")
-    os.environ['OPENAI_API_KEY'] = get_secret(keyvault_name='chatkeys', secret_name='openaiKey')
+    os.environ['OPENAI_API_KEY'] = get_secret("chatKeys", "openaiKey")   
     os.environ['storage_account_name'] = 'chatgptv2stn'
     os.environ['container_name'] = 'chatgpt-ctn'
     os.environ['resource_group_name'] ='chatgptGp'
     os.environ['cosmosdb_acc'] ='chatgptdb-acn'
     os.environ['database_name']='chatgptdb-dbn'
-    os.environ['collection_name']='chatgptdb-cln'    
-    print(cosmos_dict['connecting_string'])
-    os.environ['connections_string'] = get_cosmosdb_keys['connecting_string']
-    os.environ['OPENAI_API_KEY'] = get_secret(keyvault_name='chatkeys', secret_name='openaiKey')    
+    os.environ['collection_name']='chatgptdb-cln'  
+      
+    pinecone_dict = get_pinecone_keys()
+    pinecone_jar, cosmos_jar = set_spark_liraries()
+
+    print(list_filepaths_in_cosmosdb_container()[:1])
     
+    
+
+        
     #blob storage loading
 
     print("load blob storage")
