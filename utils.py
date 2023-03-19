@@ -18,9 +18,10 @@ import openai
 import pinecone
 import pdfplumber
 import tiktoken
+import pymongo
 from tika import parser
 from unidecode import unidecode
-from pymongo import MongoClient
+from azure.cosmos import exceptions, CosmosClient, PartitionKey
 from azure.storage.blob import BlobServiceClient, ContainerClient, BlobClient
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
@@ -65,6 +66,8 @@ def get_cosmosdb_keys(resourceGroup,cosmosdb_name):
     database_name =        os.popen(f"az cosmosdb database list --name {cosmosdb_name} --resource-group {resourceGroup} | jq -r '.[0].id'").read().strip()
     collection_name =       os.popen(f"az cosmosdb collection list --name {cosmosdb_name} --db-name {database_name} --resource-group {resourceGroup} | jq -r '.[0].id'").read().strip()
     masterkey =            os.popen(f" az cosmosdb list-keys --name {cosmosdb_name} --resource-group {resourceGroup} --query primaryMasterKey").read().strip()
+    connecting_string =    os.popen(f"az cosmosdb keys list --type connection-strings --resource-group {resourceGroup}\
+                              --name {cosmosdb_name} | jq '.connectionStrings[0].connectionString' ").read().strip().replace('"','')
     
     return {
         
@@ -72,9 +75,14 @@ def get_cosmosdb_keys(resourceGroup,cosmosdb_name):
         "masterkey" : masterkey,
         "database_name" : database_name,
         "collection_name" : collection_name,
-        "writingBatchSize":"1000",
-        "Upsert": "true"
+        "connecting_string" : connecting_string
     }
+
+def list_filepaths_in_cosmosdb_container():
+    client = pymongo.MongoClient(os.environ['connections_string'])
+    collection_client = client.get_database(os.environ['database_name']).get_collection(os.environ['collection_name'])
+    list = [item['Filepath'] for item in collection_client.find()]
+    return list
 
 def set_spark_liraries():
         #packages to load in spark session
@@ -178,7 +186,7 @@ def preprocess_text(text):
     text = re.sub(r'[^\x00-\x7F]+', ' ', text)
     return text.strip()
 
-def extract_text_from_container( list_of_pdf_uploaded =[]):
+def extract_text_from_container( list_of_pdf_uploaded =list_filepaths_in_cosmosdb_container()):
     print("get environment variables")
     storage_account_name = get_env_vars()['storage_account_name']
     container_name = get_env_vars()['container_name']
@@ -205,6 +213,9 @@ def load_blob_into_memory(blob_name):
     
     if storage_account_name is None or container_name is None or resource_group_name is None:
         raise Exception("Missing environment variables")
+    elif blob_name is None:
+        raise Exception("Missing blob name")
+        return ''
     else:
         
         try:
@@ -258,7 +269,7 @@ def tika_parser(blob_data):
             return None
     except:
         print("Error reading PDF file from memory")
-        return None
+        return ''
 
 
 

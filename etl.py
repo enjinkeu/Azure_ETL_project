@@ -15,13 +15,15 @@ def main():
     cosmos_dict = get_cosmosdb_keys(resourceGroup = "chatgptGp",cosmosdb_name="chatgptdb-acn")
     os.environ['OPENAI_API_KEY'] = get_secret(keyvault_name='chatkeys', secret_name='openaiKey')
     
+    cosmos_dict = get_cosmosdb_keys(resourceGroup = "chatgptGp",cosmosdb_name="chatgptdb-acn")
     os.environ['storage_account_name'] = 'chatgptv2stn'
     os.environ['container_name'] = 'chatgpt-ctn'
     os.environ['resource_group_name'] ='chatgptGp'
-    
     os.environ['cosmosdb_acc'] ='chatgptdb-acn'
     os.environ['database_name']='chatgptdb-dbn'
     os.environ['collection_name']='chatgptdb-cln'    
+    os.environ['connections_string'] = cosmos_dict['connecting_string']
+    os.environ['OPENAI_API_KEY'] = get_secret(keyvault_name='chatkeys', secret_name='openaiKey')    
     
     #blob storage loading
 
