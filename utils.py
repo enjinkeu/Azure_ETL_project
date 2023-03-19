@@ -66,7 +66,7 @@ def get_cosmosdb_keys(resourceGroup,cosmosdb_name):
     database_name =        os.popen(f"az cosmosdb database list --name {cosmosdb_name} --resource-group {resourceGroup} | jq -r '.[0].id'").read().strip()
     collection_name =       os.popen(f"az cosmosdb collection list --name {cosmosdb_name} --db-name {database_name} --resource-group {resourceGroup} | jq -r '.[0].id'").read().strip()
     masterkey =            os.popen(f" az cosmosdb list-keys --name {cosmosdb_name} --resource-group {resourceGroup} --query primaryMasterKey").read().strip()
-    connecting_string =    os.popen(f"az cosmosdb keys list --type connection-strings --resource-group {resourceGroup}\
+    connection_string =    os.popen(f"az cosmosdb keys list --type connection-strings --resource-group {resourceGroup}\
                               --name {cosmosdb_name} | jq '.connectionStrings[0].connectionString' ").read().strip().replace('"','')
     
     return {
@@ -75,7 +75,7 @@ def get_cosmosdb_keys(resourceGroup,cosmosdb_name):
         "masterkey" : masterkey,
         "database_name" : database_name,
         "collection_name" : collection_name,
-        "connecting_string" : connecting_string
+        "connection_string" : connection_string
     }
 
 def list_filepaths_in_cosmosdb_container():
@@ -159,18 +159,7 @@ def delete_cosmosdb_uploaded_files():
     return collection_name.delete_many({})
 
 
-def get_cosmosdb_uploaded_files():
-    """ get cosmos db keys from azure""" 
-    resource_group_name = get_env_vars()['resource_group_name']
-    cosmosdb_acc = get_env_vars()['cosmosdb_acc']  
-    database_name=get_env_vars()['database_name'] 
-    collection_name=get_env_vars()['collection_name']   
-    
-    connecting_string = os.popen(f"az cosmosdb keys list --type connection-strings --resource-group {resource_group_name}\
-                              --name {cosmosdb_acc} | jq '.connectionStrings[0].connectionString' ").read().strip().replace('"','')
-    collection_name = MongoClient(connecting_string)[database_name][collection_name]
-    
-    return collection_name
+
 
 
 ######################    PDF EXTRACTION     ###############################
