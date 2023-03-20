@@ -100,19 +100,7 @@ def get_cosmosdb_keys():
             "connection_string" : connection_string
         }
 
-def list_filepaths_in_cosmosdb_container():
-    print("getting filepaths from cosmosdb")   
-    """ get cosmos db keys from azure"""
-    resource_group_name = get_env_vars()['resource_group_name']
-    cosmosdb_acc = get_env_vars()['cosmosdb_acc']
-    database_name = get_env_vars()['database_name']
-    collection_name = get_env_vars()['collection_name'] 
-    client = pymongo.MongoClient(os.environ['connection_string'])
-    connecting_string = os.popen(f"az cosmosdb keys list --type connection-strings --resource-group {resource_group_name}\
-                              --name {cosmosdb_acc} | jq .connectionStrings[0].connectionString ").read().strip().replace('"','')
-    collection_client = client.get_database(os.environ['database_name']).get_collection(os.environ['collection_name'])
-    list = [item['Filepath'] for item in collection_client.find()]
-    return list
+
 
 def set_spark_liraries():
         #packages to load in spark session
@@ -142,18 +130,37 @@ def list_files(startpath):
             list_files.append(os.path.join(root, file))
     return [item for item in list_files if '.pdf' in item]
 
+def list_filepaths_in_cosmosdb_container():
+    print("getting filepaths from cosmosdb")   
+    """ get cosmos db keys from azure"""
+    resource_group_name = get_env_vars()['resource_group_name']
+    cosmosdb_acc = get_env_vars()['cosmosdb_acc']
+    database_name = get_env_vars()['database_name']
+    collection_name = get_env_vars()['collection_name'] 
+    print(resource_group_name,cosmosdb_acc,database_name,collection_name)
+    
+    connecting_string = os.popen(f"az cosmosdb keys list --type connection-strings --resource-group {resource_group_name}\
+                              --name {cosmosdb_acc} | jq .connectionStrings[0].connectionString ").read().strip().replace('"','')
+    client = pymongo.MongoClient(connecting_string)
+    collection_client = client.get_database(database_name).get_collection(collection_name)
+    list = [item['Filepath'] for item in collection_client.find()]
+    return list
+
 def list_pdfblobs():
 
     storage_account_name = get_env_vars()['storage_account_name']
     resource_group_name = get_env_vars()['resource_group_name']
     container_name = get_env_vars()['container_name']
+
     """list pdf blobs in blob storage"""
-    list_of_uploaded_files = [item['Filepath'] for item in list_filepaths_in_cosmosdb_container()]
+    list_of_uploaded_files =  list_filepaths_in_cosmosdb_container()
     storage_account_key = os.popen(f"az storage account keys list -n {storage_account_name} -g {resource_group_name} --query [0].value -o tsv").read().strip()
     storage_connection_string = os.popen(f"az storage account show-connection-string -g {resource_group_name} -n {storage_account_name} --query connectionString").read().strip()  
     container = ContainerClient.from_connection_string(conn_str=storage_connection_string, container_name=container_name)
     blob_list = container.list_blobs()
     #https://<your-storage-account-name>.blob.core.windows.net/<your-container-name>/<your-blob-name>
+
+    print(list_filepaths_in_cosmosdb_container()[:1])
 
     blob_list =  [item['name'] for item in blob_list if item['name'].endswith('.pdf')  if item['name'] not in list_of_uploaded_files]
     print(blob_list)
@@ -186,9 +193,17 @@ def extract_title(pdf_path):
 
 # Extract text from a PDF file
 def preprocess_text(text):
-    # Replace any non-UTF-8 characters with a space
-    text = re.sub(r'[^\x00-\x7F]+', ' ', text)
-    return text.strip()
+    if text is None or text == '':
+        return ''
+    else:
+        try:
+            # Replace any non-UTF-8 characters with a space
+            text = re.sub(r'[^\x00-\x7F]+', ' ', text)
+            return text.strip()
+        except:
+            print("error in preprocessing text")
+            return ''
+    
 
 def extract_text_from_container( list_of_pdf_uploaded =list_filepaths_in_cosmosdb_container()):
     print("get environment variables")
@@ -395,7 +410,7 @@ def write_to_cosmosdb(items):
     connecting_string = os.popen(f"az cosmosdb keys list --type connection-strings --resource-group {resource_group_name}\
                               --name {cosmosdb_acc} | jq '.connectionStrings[0].connectionString' ").read().strip().replace('"','')
     
-    mongo_client = MongoClient(connecting_string)
+    mongo_client = pymongo.MongoClient(connecting_string)
     collection = mongo_client[database_name][collection_name]
 
     for item in items:
