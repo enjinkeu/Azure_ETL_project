@@ -11,6 +11,7 @@ import json
 import string
 import hashlib
 import datetime
+
 from time import time, sleep
 from typing import List
 
@@ -30,6 +31,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import udf, col
 from pyspark.sql.types import *
 from langchain.text_splitter import CharacterTextSplitter
+from tqdm import tqdm
 
 def cli_signIn():
     """function to login to azure cli if not already logged in"""
@@ -368,9 +370,10 @@ def split_text(text: str):
  
 def get_embedding(text, model="text-embedding-ada-002"):
     """ get embedding from openai"""
-    openai.api_key = get_env_vars()['OPENAI_API_KEY']
-    text = text.replace("\n"," ")
+    openai.api_key = get_env_vars()['OPENAI_API_KEY']    
     return openai.Embedding.create(input = [text], model=model)['data'][0]['embedding']
+
+
 
 def get_pincone_pdfdata( text,metadata):    
     """ get pinecone pdf data"""
@@ -384,6 +387,29 @@ def get_pincone_pdfdata( text,metadata):
                          } for item in chunks]  
     return pinecone_docs
 
+def get_data_from_cosmosdb():
+    """ get data from cosmos db"""
+    #get cosmosdb connection string
+    resource_group_name = get_env_vars()['resource_group_name']
+    cosmosdb_acc = get_env_vars()['cosmosdb_acc']
+    database_name = get_env_vars()['database_name']
+    collection_name = get_env_vars()['collection_name']
+    connecting_string = os.popen(f"az cosmosdb keys list --type connection-strings --resource-group {resource_group_name}\
+                          --name {cosmosdb_acc} | jq .connectionStrings[0].connectionString ").read().strip().replace('"','')
+    
+    client = pymongo.MongoClient(connecting_string)
+    collection_client = client.get_database(database_name).get_collection(collection_name)
+
+    #create a list of tuples of text and metadata
+    try:
+        list = [(item['Metadata'], item['text']) for item in collection_client.find()]
+        print(list)
+        return list
+    except:
+        print('no data in cosmosdb')
+        return []
+   
+
 
 ######################    UPLOAD DATA     ###############################
 
@@ -394,19 +420,42 @@ def upsert_pinecone_data(vector):
     pinecone.environment = get_pinecone_keys()['pinecone.environment']
     pinecone.indexName = get_pinecone_keys()['pinecone.indexName']
     pinecone.projectName = get_pinecone_keys()['pinecone.projectName']
-    
+
     #initialize pinecone
     pinecone.init(api_key=pinecone.apiKey, env=pinecone.environment)
+    index = pinecone.Index(pinecone.indexName) 
+
+    #filter out ids with no metadata uploaded
+    # metadata_filter ={"metadata" : None}
+    try:
+        print('upsert vector')
+        return index.upsert(vector , namespace=pinecone.projectName)
+    except Exception as e:
+        print(f"Exception: {e} - Skipping {vector['id']}")
+        
+    # results = index.query(queries=[], metadata_filter=metadata_filter,top_k=None)
+    # ids = [result.id for result in results]
+
+    # if vector['id'] in ids:
+    #     try:
+    #         print('upsert vector')
+    #         return index.upsert(vector , namespace=pinecone.projectName)
+    #     except Exception as e:
+    #         print(f"Exception: {e} - Skipping {vector['id']}")
+            
+    # else:
+    #     print('vector already exists')
+
     
-    index = pinecone.Index(pinecone.indexName)
-    return index.upsert(vector , namespace=pinecone.projectName)
+    
+    
 
 def write_to_cosmosdb(items):
     
-    resource_group_name =  os.environ.get('resource_group_name')
-    cosmosdb_acc =         os.environ.get('cosmosdb_acc')
-    database_name =        os.environ.get('database_name')
-    collection_name =      os.environ.get('collection_name')
+    resource_group_name =  get_env_vars()['resource_group_name']
+    cosmosdb_acc =         get_env_vars()['cosmosdb_acc']
+    database_name =        get_env_vars()['database_name']
+    collection_name =      get_env_vars()['collection_name']
     connecting_string = os.popen(f"az cosmosdb keys list --type connection-strings --resource-group {resource_group_name}\
                               --name {cosmosdb_acc} | jq '.connectionStrings[0].connectionString' ").read().strip().replace('"','')
     
@@ -416,3 +465,7 @@ def write_to_cosmosdb(items):
     for item in items:
         print(item['summary'])
         collection.update_one({"id": item["id"]}, {"$set": item}, upsert=True)
+
+
+
+    
