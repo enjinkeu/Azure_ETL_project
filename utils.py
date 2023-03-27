@@ -495,6 +495,7 @@ def upsert_pinecone_data(vector):
 
 def write_to_cosmosdb(items):
     
+    logging.info("writing to cosmosdb")
     resource_group_name =  get_env_vars()['resource_group_name']
     cosmosdb_acc =         get_env_vars()['cosmosdb_acc']
     database_name =        get_env_vars()['database_name']
@@ -502,12 +503,19 @@ def write_to_cosmosdb(items):
     connecting_string = os.popen(f"az cosmosdb keys list --type connection-strings --resource-group {resource_group_name}\
                               --name {cosmosdb_acc} | jq '.connectionStrings[0].connectionString' ").read().strip().replace('"','')
     
+    logging.info(f"connecting to cosmosdb {connecting_string}")
     mongo_client = pymongo.MongoClient(connecting_string)
     collection = mongo_client[database_name][collection_name]
 
     for item in items:
-        print(item['summary'])
-        collection.update_one({"id": item["id"]}, {"$set": item}, upsert=True)
+        logging.info(f"writing {item['id']} to cosmosdb")
+        try:
+            print(item['summary'])
+            collection.update_one({"id": item["id"]}, {"$set": item}, upsert=True)
+        except Exception as e:
+            logging.error(f"Exception: {e} - Skipping {item['id']}")
+            print(f"Exception: {e} - Skipping {item['id']}")
+            continue
 
 
 
