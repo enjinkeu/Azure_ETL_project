@@ -49,6 +49,7 @@ def main():
     print(f"number of pdf files: {len(preprocess_text_list)}")
     
     load_to_cosmosdb_rdd = spark.sparkContext.parallelize(preprocess_text_list).map(lambda x: (x[0], preprocess_text(x[1]))).\
+                                    filter(lambda x: type(x[1]) == str ).\
                                     map(lambda x: {
                                             "Filepath": x[0],
                                             "Metadata": {
