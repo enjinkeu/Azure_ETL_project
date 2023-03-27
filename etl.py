@@ -44,7 +44,7 @@ def main():
 
     preprocess_text_list =  spark.sparkContext.parallelize(extract_text_from_container()).collect()
 
-    preprocess_text_list = [item for item in preprocess_text_list if item[1] is not None]
+
 
     print(f"number of pdf files: {len(preprocess_text_list)}")
     

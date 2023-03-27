@@ -11,6 +11,7 @@ import json
 import string
 import hashlib
 import datetime
+import logging
 
 from time import time, sleep
 from typing import List
@@ -34,14 +35,14 @@ from langchain.text_splitter import CharacterTextSplitter
 from tqdm import tqdm
 
 def cli_signIn():
-    """function to login to azure cli if not already logged in"""
+    logging.info("signing in to azure cli")    
     os.system("az account list --output tsv | grep True -q || az login")
 
 ######################    SECRETS       ###############################
 
 def get_env_vars():
-    """ get environment variables from azure""" 
-  
+    logging.info("getting environment variables")
+
     env_dict = {
         "resource_group_name": 'chatgptGp',
         "storage_account_name": 'chatgptv2stn',
@@ -55,18 +56,21 @@ def get_env_vars():
     }   
     for k, v in env_dict.items():
         if v is None:
+            logging.error(f"{k} environment variable is not set")
             raise Exception(f"{k} environment variable is not set")
     return env_dict
 
 
 def get_secret(keyvault_name ="chatkeys", secret_name = "openaiKey"):
-    """Get secret from Azure Key Vault"""
+    
+    logging.info(f"getting secret {secret_name} from keyvault {keyvault_name}")    
     credential = DefaultAzureCredential()
     secret_client = SecretClient(vault_url=f"https://{keyvault_name}.vault.azure.net", credential=credential)
     secret = secret_client.get_secret(secret_name)
     return secret.value
 
 def get_pinecone_keys():
+    logging.info("getting pinecone keys from keyvault")
     """ get pinecone keys from azure"""
     pinecone_api_key = get_secret(keyvault_name ="chatkeys", secret_name = "pinecone")
     pinecone_env = get_secret(keyvault_name ="chatkeys", secret_name = "pineconeEnv")
@@ -80,9 +84,9 @@ def get_pinecone_keys():
     }
         
 def get_cosmosdb_keys():
-    """ get cosmos db keys from azure"""
-    #create environment variables  
+    logging.info("getting cosmosdb keys from keyvault")    
     
+    #create environment variables      
     resourceGroup = get_env_vars()['resource_group_name']
     cosmosdb_name = get_env_vars()['cosmosdb_acc']
     cosmosDbEndpoint_url = os.popen(f"az cosmosdb show --resource-group {resourceGroup}  --name {cosmosdb_name} --query 'writeLocations[].documentEndpoint' -o tsv").read().strip()
@@ -105,26 +109,29 @@ def get_cosmosdb_keys():
 
 
 def set_spark_liraries():
-        #packages to load in spark session
-        group_id = "io.pinecone"
-        artifact_id = "spark-pinecone_2.13"
-        version = "0.1.1"
+    
+    logging.info("setting spark libraries")
+    #packages to load in spark session
+    group_id = "io.pinecone"
+    artifact_id = "spark-pinecone_2.13"
+    version = "0.1.1"
 
-        pkg1 = f"{group_id}:{artifact_id}:{version}"
+    pkg1 = f"{group_id}:{artifact_id}:{version}"
 
-        group_id = "com.azure.cosmos.spark"
-        artifact_id = "azure-cosmos-spark_3-3_2-12"
-        version = "4.17.2"
+    group_id = "com.azure.cosmos.spark"
+    artifact_id = "azure-cosmos-spark_3-3_2-12"
+    version = "4.17.2"
 
-        pkg2 = f"{group_id}:{artifact_id}:{version}"
+    pkg2 = f"{group_id}:{artifact_id}:{version}"
 
-        return pkg1, pkg2
+    return pkg1, pkg2
 
 
 ######################    FILE MANAGEMENT       ###############################
 
 def list_files(startpath):
-    """ list all files in a directory"""
+
+    logging.info("listing files in directory")    
     list_files = []
     for root, dirs, files in os.walk(startpath):
         for file in files:
@@ -132,37 +139,38 @@ def list_files(startpath):
             list_files.append(os.path.join(root, file))
     return [item for item in list_files if '.pdf' in item]
 
-def list_filepaths_in_cosmosdb_container():
-    print("getting filepaths from cosmosdb")   
-    """ get cosmos db keys from azure"""
+def list_filepaths_in_cosmosdb_container():    
+       
+    logging.info("getting filepaths from cosmosdb")    
     resource_group_name = get_env_vars()['resource_group_name']
     cosmosdb_acc = get_env_vars()['cosmosdb_acc']
     database_name = get_env_vars()['database_name']
     collection_name = get_env_vars()['collection_name'] 
-    print(resource_group_name,cosmosdb_acc,database_name,collection_name)
     
-    connecting_string = os.popen(f"az cosmosdb keys list --type connection-strings --resource-group {resource_group_name}\
-                              --name {cosmosdb_acc} | jq .connectionStrings[0].connectionString ").read().strip().replace('"','')
-    client = pymongo.MongoClient(connecting_string)
-    collection_client = client.get_database(database_name).get_collection(collection_name)
-    list = [item['Filepath'] for item in collection_client.find()]
-    return list
+    try:
+        connecting_string = os.popen(f"az cosmosdb keys list --type connection-strings --resource-group {resource_group_name}\
+                                --name {cosmosdb_acc} | jq .connectionStrings[0].connectionString ").read().strip().replace('"','')
+        client = pymongo.MongoClient(connecting_string)
+        collection_client = client.get_database(database_name).get_collection(collection_name)
+        list = [item['Filepath'] for item in collection_client.find()]
+        return list
+    except Exception as e:
+        logging.error(f"error getting filepaths from cosmosdb: {e}")
+        raise Exception(f"error getting filepaths from cosmosdb: {e}")
 
 def list_pdfblobs():
 
+    logging.info("get environment variables")
     storage_account_name = get_env_vars()['storage_account_name']
     resource_group_name = get_env_vars()['resource_group_name']
     container_name = get_env_vars()['container_name']
-
-    """list pdf blobs in blob storage"""
+    
+    logging.info("listing pdf blobs in blob storage")    
     list_of_uploaded_files =  list_filepaths_in_cosmosdb_container()
     storage_account_key = os.popen(f"az storage account keys list -n {storage_account_name} -g {resource_group_name} --query [0].value -o tsv").read().strip()
     storage_connection_string = os.popen(f"az storage account show-connection-string -g {resource_group_name} -n {storage_account_name} --query connectionString").read().strip()  
     container = ContainerClient.from_connection_string(conn_str=storage_connection_string, container_name=container_name)
     blob_list = container.list_blobs()
-    #https://<your-storage-account-name>.blob.core.windows.net/<your-container-name>/<your-blob-name>
-
-    print(list_filepaths_in_cosmosdb_container()[:1])
 
     blob_list =  [item['name'] for item in blob_list if item['name'].endswith('.pdf')  if item['name'] not in list_of_uploaded_files]
     print(blob_list)
@@ -170,7 +178,8 @@ def list_pdfblobs():
     return blob_list
 
 def delete_cosmosdb_uploaded_files():
-    """ get cosmos db keys from azure"""
+    
+    logging.info("getting cosmosdb keys from azure")
     resource_group_name = get_env_vars()['resource_group_name']
     cosmosdb_acc = get_env_vars()['cosmosdb_acc']
     database_name = get_env_vars()['database_name']
@@ -189,43 +198,52 @@ def delete_cosmosdb_uploaded_files():
 ######################    PDF EXTRACTION     ###############################
 
 def extract_title(pdf_path):
-    """ extract metatdata from a pdf path"""
+    
+    logging.info("extracting title from pdf")
     lst = pdf_path.replace('..','').split('/')[1:]
     return lst
 
 # Extract text from a PDF file
 def preprocess_text(text):
+
     if text is None or text == '':
+        logging.info("text is empty")
         return ''
     else:
         try:
+            logging.info("preprocessing text")
             # Replace any non-UTF-8 characters with a space
             text = re.sub(r'[^\x00-\x7F]+', ' ', text)
             return text.strip()
         except:
+            logging.error("error in preprocessing text")
             print("error in preprocessing text")
             return ''
     
 
 def extract_text_from_container( list_of_pdf_uploaded =list_filepaths_in_cosmosdb_container()):
-    print("get environment variables")
+    logging.info("extracting text from container")    
     storage_account_name = get_env_vars()['storage_account_name']
     container_name = get_env_vars()['container_name']
     resource_group_name = get_env_vars()['resource_group_name'] 
     storage_connection_string = os.popen(f"az storage account show-connection-string -g {resource_group_name} -n {storage_account_name} --query connectionString").read().strip()
     blob_service_client = BlobServiceClient.from_connection_string(storage_connection_string)
     container_client = blob_service_client.get_container_client(container_name)
-    return [(item.name,tika_parser(BlobServiceClient.from_connection_string(storage_connection_string).get_blob_client(container=container_name,blob= item.name).download_blob().content_as_bytes()))\
-                for item in \
-                ContainerClient.from_connection_string(conn_str=storage_connection_string, container_name=container_name).list_blobs()  \
-                if item.name not in list_of_pdf_uploaded]
-                
+    try:
+        extracted_list = [(item.name,tika_parser(BlobServiceClient.from_connection_string(storage_connection_string).get_blob_client(container=container_name,blob= item.name).download_blob().content_as_bytes()))\
+                        for item in \
+                        ContainerClient.from_connection_string(conn_str=storage_connection_string, container_name=container_name).list_blobs()  \
+                        if item.name not in list_of_pdf_uploaded and item.name.endswith('.pdf')] 
+        return extracted_list
 
+    except Exception as e:
+        logging.error(f"error extracting text from container: {e}")
+        raise Exception(f"error extracting text from container: {e}")
+    
 # Extract text from a PDF file
 def load_blob_into_memory(blob_name):
-    """load blob into memory"""
     
-    print("get environment variables")
+    logging.info("loading blob into memory")    
     storage_account_name = get_env_vars()['storage_account_name']
     container_name = get_env_vars()['container_name']
     resource_group_name = get_env_vars()['resource_group_name']    
@@ -233,28 +251,35 @@ def load_blob_into_memory(blob_name):
 
     
     if storage_account_name is None or container_name is None or resource_group_name is None:
+        logging.error("missing environment variables")
         raise Exception("Missing environment variables")
     elif blob_name is None:
+        logging.error("missing blob name")
         raise Exception("Missing blob name")
         return ''
     else:
         
         try:
-            #connection string
+            
+            logging.info("getting connection string")
             storage_connection_string = os.popen(f"az storage account show-connection-string -g {resource_group_name} -n {storage_account_name} --query connectionString").read().strip()
 
-            # Create blob service client
+            
+            logging.info("creating blob service client")
             blob_service_client = BlobServiceClient.from_connection_string(storage_connection_string)
-            # Get blob client
+            
+            logging.info("creating blob client")
             blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)     
             
             # Check if blob exists
             if blob_client.exists():
-                # Download blob data
+                logging.info(f"blob {blob_client.blob_name} exists")                
                 blob_data = blob_client.download_blob().content_as_bytes()    
                 print(f"Successfully downloaded blob: {blob_client.blob_name}")
                 return blob_data
             else:
+                logging.info(f"blob {blob_client.blob_name} does not exist")
+                logging.error(f"blob {blob_client.blob_name} does not exist")
                 print(f"Blob {blob_client.blob_name} does not exist")   
                
             
@@ -263,32 +288,38 @@ def load_blob_into_memory(blob_name):
 
 # Extract text from a PDF file
 def tika_parser(blob_data):
+    logging.info("extracting text from pdf using tika")
     try:
         with io.BytesIO(blob_data) as pdf_file:
-            # Try to extract text using Tika parser
+            
+            logging.info("trying to extract text using tika")
             try:
+                logging.info("Extracting text using tika")
                 parsed_pdf = parser.from_buffer(pdf_file)
                 text = parsed_pdf['content']
                 print(f"Successfully extracted {len(text)} characters from PDF using Tika")
                 return text
             except:
+                logging.error("error extracting text using tika")
                 pass
 
             # If Tika fails, try to extract text using pdfplumber
             try:
+                logging.info("Extracting text using pdfplumber")
                 with pdfplumber.load(pdf_file) as pdf:
                     pages = pdf.pages
                     text = "\n".join([page.extract_text() for page in pages])
                     print(f"Successfully extracted {len(text)} characters from PDF using pdfplumber")
                     return text
             except:
-                
+                logging.error("error extracting text using pdfplumber")
                 pass
 
             # If both Tika and pdfplumber fail, return None
             print("Failed to extract text from PDF using Tika or pdfplumber")
             return None
     except:
+        logging.error("error reading pdf file from memory")
         print("Error reading PDF file from memory")
         return ''
 
@@ -306,25 +337,32 @@ def chatgpt3 (userinput, temperature=0.7, frequency_penalty=0, presence_penalty=
          communication to help finish the task of concisely summarizing an article by summarizing the most pertinent essence of the text as part of a paragraph. \
          use the fewest words as possible in english"}
          ]
-    openai.api_key = get_env_vars()['OPENAI_API_KEY']
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        temperature=temperature,
-        frequency_penalty=frequency_penalty,
-        presence_penalty=presence_penalty,
-        messages=message
-    )
-    text = response['choices'][0]['message']['content']
-    return text
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            temperature=temperature,
+            frequency_penalty=frequency_penalty,
+            presence_penalty=presence_penalty,
+            messages=message
+        )
+        text = response['choices'][0]['message']['content']
+        return text
+    except:
+        logging.error("error chatting with gpt-3.5-turbo")
+        return ''
+
+    
 
 def cheaper_summarizer(text, title,temperature=0.7, frequency_penalty=0, presence_penalty=0,api_key=None):
-    """ chat with gpt-3.5-turbo, the much cheaper version of gpt-3"""        
     
+    logging.info("summarizing text using gpt-3.5-turbo")            
     if text is None:
+        logging.info(f"there is no text to summarize - Skipping {title}")
         print(f"there is no text to summarize - Skipping {title}")
         return ''
     else:
         try:
+            logging.info(f"summarizing {title} for {len(text)} characters")
             print(f"Summarizing {title} for {len(text)} characters")
             #split text into chunks
             chunks = split_text(text)
@@ -332,15 +370,18 @@ def cheaper_summarizer(text, title,temperature=0.7, frequency_penalty=0, presenc
             retry = 0
             while retry < max_retry:
                 try:
+                    logging.info(f"summarizing {title} for {len(text)} characters - attempt {retry}")
                     summaries = ' \n'.join([chatgpt3(chunk, temperature=temperature, frequency_penalty=frequency_penalty, presence_penalty=presence_penalty) for chunk in chunks])
                     break
                 except Exception as e:
+                    logging.error(f"Exception: {e} - Retrying {title}")
                     print(f"Exception: {e} - Retrying {title}") 
                     retry += 1
                     sleep(5)
                     continue                
             return summaries
         except Exception as e:
+            logging.error(f"Exception: {e} - Skipping {title}")
             print(f"Exception: {e} - Skipping {title}")
             return ''
    
@@ -349,7 +390,8 @@ def cheaper_summarizer(text, title,temperature=0.7, frequency_penalty=0, presenc
 
      
 def create_id(folder, typeofDoc, subject, author, title):
-    """ create id field for cosmos db """
+    
+    logging.info("creating id field for cosmos db")
     # create a string to hash
     my_string = f"{folder}{typeofDoc}{subject}{author}{title}"
     # create a hash object using the SHA-256 algorithm
@@ -363,6 +405,7 @@ def create_id(folder, typeofDoc, subject, author, title):
 ######################    VECTOR DATABASE DATA LOADING     ###############################
 def split_text(text: str):
     """ split text into chunks"""
+    logging.info("splitting text into chunks")
     text_splitter = CharacterTextSplitter()
     chunks = text_splitter.split_text(text)
     return chunks
