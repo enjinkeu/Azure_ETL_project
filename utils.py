@@ -327,17 +327,23 @@ def tika_parser(blob_data):
 
 def chatgpt3 (userinput, temperature=0.7, frequency_penalty=0, presence_penalty=0):
     """ chat with gpt-3.5-turbo, the much cheaper version of gpt-3"""
-    
+
+    if os.environ.get('OPENAI_API_KEY') is None:
+        logging.error("OpenAI API key not found. setting key by using get_env_vars()")
+        openai.api_key = get_env_vars()['OPENAI_API_KEY']
+        
+    logging.info("chatting with gpt-3.5-turbo")        
     suffix = "\n\nTl;dr"
     prompt = userinput+suffix
     assistant_prompt =""
     message = [
         {"role": "user", "content": prompt },        
         {"role": "system", "content": "you are a helpful distinguished scholarly assistant that uses efficient \
-         communication to help finish the task of concisely summarizing an article by summarizing the most pertinent essence of the text as part of a paragraph. \
-         use the fewest words as possible in english"}
-         ]
+        communication to help finish the task of concisely summarizing an article by summarizing the most pertinent essence of the text as part of a paragraph. \
+        use the fewest words as possible in english"}
+        ]
     try:
+        openai.api_key = os.getenv("OPENAI_API_KEY")
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             temperature=temperature,
@@ -347,9 +353,10 @@ def chatgpt3 (userinput, temperature=0.7, frequency_penalty=0, presence_penalty=
         )
         text = response['choices'][0]['message']['content']
         return text
-    except:
-        logging.error("error chatting with gpt-3.5-turbo")
+    except Exception as e:
+        logging.error(f"error chatting with gpt-3.5-turbo for this error: {e}")
         return ''
+
 
     
 
