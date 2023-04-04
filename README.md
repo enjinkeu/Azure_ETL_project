@@ -7,13 +7,12 @@ In this project, we will create a batch ETL processing pipeline that uses Azure 
 
 ### Technologies and Skills
 
-- **Azure Data Factory**: Proficient in creating and managing pipelines for ETL processing using Azure Data Factory.
-- **Azure Blob Storage**: Expert in managing and configuring Blob Storage for storing large volumes of unstructured data such as PDF files.
-- **Chatgpt API**: Skilled in integrating and using Chatgpt API for natural language processing tasks such as summarizing PDF content.
-- **Cosmos DB**: Strong knowledge of using Cosmos DB document databases for storing unstructured data in a highly scalable and available manner.
-- **Python**: Strong programming skills in Python, with experience in using libraries and tools for data processing and manipulation.
-- **API Integration**: Proficient in integrating third-party APIs and services into data processing pipelines.
-- **Data Engineering Best Practices**: Knowledge of data engineering patterns, practices, and tools for building robust and maintainable data processing solutions.
+- **Azure Data Factory**: Azure service to create and manage pipelines for ETL processing using Azure Data Factory.
+- **Azure Blob Storage**: Azure storage solution for storing large volumes of unstructured data such as PDF files.
+- **Chatgpt API**: large language model Chatgpt API for natural language processing tasks such as summarizing PDF content.
+- **Cosmos DB**: Azure Cosmos DB solution used as document databases for storing unstructured data in a highly scalable and available manner.
+- **Pyspark**: Spark processing to build scalable ETL infrastructure
+
 
 ### Pipeline Architecture
 
