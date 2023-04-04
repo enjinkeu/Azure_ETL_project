@@ -12,6 +12,7 @@ In this project, we will create a batch ETL processing pipeline that uses Azure 
 - **Chatgpt API**: large language model Chatgpt API for natural language processing tasks such as summarizing PDF content.
 - **Cosmos DB**: Azure Cosmos DB solution used as document databases for storing unstructured data in a highly scalable and available manner.
 - **Pyspark**: Spark processing to build scalable ETL infrastructure
+- **Azure Databricks**: azure streamlined spark ETL workspace to unify ETL for different type of files
 
 
 ### Pipeline Architecture
