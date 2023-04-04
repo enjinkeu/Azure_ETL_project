@@ -16,25 +16,29 @@ def cli_signIn():
     #check if logged in
     os.system("az account list --output tsv | grep True -q || az login")
 
+
+#########################################################################
+#                                                                       #                   
+#                 create ingestion infrastructure                       #                      
+#                                                                       #  
+#########################################################################
+
 #create resource group
 def createResourceGroup(resourceGroup, location):
-
+    """ Create a resource group if it doesn't exist """
     try:
         print("check if resource group exists")
         subprocess.check_output(f"az group list --output tsv | grep {resourceGroup} -q || az group create --name {resourceGroup} --location {location}", stderr=subprocess.STDOUT, shell=True)
         print(f"Resource group {resourceGroup} created or already exists")
+        return resourceGroup
     except subprocess.CalledProcessError as e:
         print(f"Error creating resource group: {e.output.decode()}")
-        return None
-    return resourceGroup
-
-
-
-
+        return None   
 
 
 #create storage account
 def createStorageAccount(resourceGroup, storage_account_name, location):
+    """ Create a storage account if it doesn't exist """
     try:
         print("check if storage account exists")
         subprocess.check_output(f"az storage account list --output tsv \
@@ -51,6 +55,7 @@ def createStorageAccount(resourceGroup, storage_account_name, location):
 
 #create container
 def createContainer(storageAccount, container):
+    """ Create a container if it doesn't exist """
     try:
         print("check if container exists")
         subprocess.check_output(f"az storage container list --account-name {storageAccount} --output tsv \
@@ -64,7 +69,7 @@ def createContainer(storageAccount, container):
 
 #create cosmosdb
 def createCosmosdb(resourceGroup, cosmosdb, location):
-
+    """ Create a cosmosdb if it doesn't exist """
     try:
         print("check if cosmosdb exists")
         subprocess.check_output(f"az cosmosdb list --output tsv | grep {cosmosdb} -q \
@@ -80,7 +85,7 @@ def createCosmosdb(resourceGroup, cosmosdb, location):
 
 #create cosmosdb database
 def createCosmosdbDatabase(resourceGroup, cosmosdb, database):
-
+    """ Create a cosmosdb database if it doesn't exist """
     try:
         print("check if database exists")
         subprocess.check_output(f"az cosmosdb mongodb database list --account-name {cosmosdb} --resource-group {resourceGroup} --output tsv \
@@ -94,7 +99,7 @@ def createCosmosdbDatabase(resourceGroup, cosmosdb, database):
 
 #create cosmosdb collection
 def createCosmosdbCollection(resourceGroup, cosmosdb, database, collection):
-
+    """ Create a cosmosdb collection if it doesn't exist """
     try:
         print("check if collection exists")
         subprocess.check_output(f"az cosmosdb mongodb collection list --account-name {cosmosdb} --database-name {database} --resource-group {resourceGroup} --output tsv \
@@ -368,12 +373,14 @@ def upload_to_blob_storage(pdfpath , storage_account_name, resource_group_name, 
 
 
 def get_resource_subscription_id(resource_group_name):
+    """get resource subscription id"""
     return os.popen(f"az group show --name {resource_group_name} | jq -r '.id'").read().strip()
 
 
 
 # create service principal 
 def create_service_principal(name, role, scope,vault_name, cert_name):
+    """create service principal"""
     # check if service principal exists
     try:
         print("check if service principal exists")
@@ -388,6 +395,7 @@ def create_service_principal(name, role, scope,vault_name, cert_name):
     return name
 
 def get_service_principal_appid(service_principal_name):
+    """get service principal app id"""
     try:
         cmd = f" az ad sp list --display-name {service_principal_name} --query '[0].appId'"
         output = os.popen(cmd).read().strip()
@@ -413,6 +421,7 @@ def get_tenant_id():
     return output
 
 def delete_linked_service(datafactoryName, linkedServiceName, resourceGroupName):
+    """ delete linked service"""
     try:
         cmd = f"az datafactory linked-service delete --factory-name {datafactoryName} -n {linkedServiceName} -g {resourceGroupName}"
         print(cmd)
@@ -427,7 +436,7 @@ def delete_linked_service(datafactoryName, linkedServiceName, resourceGroupName)
 def get_hdinsightOnDemandLinkedService_json(hdinsightlinkedService_name, principal_name,
                                             resource_group_name, blobStorage_linked_service_name, filename, clusterType):
     
- 
+    """get hdinsightOnDemandLinkedService json"""
     subscription_id = os.popen("az account show --query id -o tsv").read().strip()
     servicePrincipalID = os.popen(f"az ad sp list --display-name hdinsightPrincipal --query '[].appId'  -o tsv").read().strip()
     servicePrincipalKey = get_secret(keyvault_name="chatkeys", secret_name="chatgptv2cert" )
@@ -510,55 +519,16 @@ def create_data_lake_storage (resource_group_name, lake2_storage_account_name, l
         return None
     
 
-def create_spark_pipeline_json(dafafactoryName, datafactoryDescription, sparkJoblinkedService_name, hdlinkedService_name, codeContainer_name, codeFile_name):
-    json ={
-            "name": "Transform data using on-demand HDInsight",
-            "properties": {
-                "description": datafactoryDescription,
-                "activities": [
-                    {
-                        "name": "ProcessData",
-                        "description": datafactoryDescription,
-                        "type": "HDInsightSpark",
-                        "dependsOn": [],
-                        "policy": {
-                            "timeout": "7.00:00:00",
-                            "retry": 0,
-                            "retryIntervalInSeconds": 30,
-                            "secureOutput": "false",
-                            "secureInput": "false"
-                        },
-                        "userProperties": [],
-                        "typeProperties": {
-                            "rootPath": codeContainer_name,
-                            "entryFilePath": codeFile_name,
-                            "arguments": [
-                                "@pipeline().RunId"
-                            ],
-                            "getDebugInfo": "Always",
-                            "sparkConfig": {
-                                "runid": {
-                                    "value": "@pipeline().RunId",
-                                    "type": "Expression"
-                                }
-                            },
-                            "sparkJobLinkedService": {
-                                "referenceName": sparkJoblinkedService_name,
-                                "type": "LinkedServiceReference"
-                            }
-                        },
-                        "linkedServiceName": {
-                            "referenceName": hdlinkedService_name,
-                            "type": "LinkedServiceReference"
-                        }
-                    }
-                ],
-                "annotations": [],
-                "lastPublishTime": "2023-03-23T06:07:45Z"
-            },
-            "type": "Microsoft.DataFactory/factories/pipelines"
-        }
-    return json
+
+def createTriggerJson();
+    """create data factory trigger json"""
+    #az datafactory trigger create --factory-name <factory-name> 
+    # --name <trigger-name> --resource-group <resource-group-name> 
+    # --pipeline-name <pipeline-name> --json --type BlobEventTrigger 
+    # --blob-path <container-name> --blob-name "*.csv" --connection-string <storage-account-connection-string>
+
+
+
 
 def main():
     #signin to azure
@@ -631,10 +601,6 @@ def main():
 
     #upload pfs
     upload_to_blob_storage('../src/', storage_account_name = storage_account_name, resource_group_name = resource_group_name, container_name = container_name)    
-  
-   #upload code
-    #upload_to_blob_storage('../src/', storage_account_name = storage_account_name, resource_group_name = resource_group_name, container_name = container_name)    
-  
 
 
 
