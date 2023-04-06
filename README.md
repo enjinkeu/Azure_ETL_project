@@ -15,12 +15,13 @@ In this project, we will create a batch ETL processing pipeline that uses Azure 
 - **Azure Databricks**: azure streamlined spark ETL workspace to unify ETL for different type of files
 
 
-### Pipeline Architecture
+### Data Factory Pipeline Architecture
 
-1. The pipeline starts with a trigger that monitors a specified Blob Storage container for new PDF files.
-2. When a new file is detected, Azure Data Factory extracts the text from the PDF file using a Databricks notebook.
-3. The extracted text is then passed to Chatgpt API for summarization.
-4. The summarized text is stored in a Cosmos DB document database.
+- 1. **Event-based trigger**: Listens for the BlobCreated event on your Blob Storage container and starts the pipeline when a new file is added to the container.
+- 2. **Copy activity (Data Lake Storage Gen2 to Delta Lake)**: Copies data from your Data Lake Storage Gen2 account to a Delta Lake table on your Databricks cluster.
+- 3. **Databricks Notebook activity**: Runs a transformation on the data in the Delta Lake table using a Databricks notebook.
+- 4. **Copy activity (Delta Lake to Cosmos DB)**: Copies the transformed data from the Delta Lake table to your Cosmos DB account.
+
 
 ### Conclusion
 
