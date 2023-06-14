@@ -1,2 +1,6 @@
 test.ipynb
 .env
+deployment.py
+requirements.sh
+requirements.txt
+utils.py
