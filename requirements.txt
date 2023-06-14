@@ -12,8 +12,8 @@ tiktoken
 unidecode
 pinecone-client
 python-dotenv
-json
 pexpect
 subprocess32
 tqdm
+langchain
 
