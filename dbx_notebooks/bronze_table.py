@@ -357,3 +357,15 @@ def summarize_text_udf(text):
 
 
 
+@udf(returnType= StringType())
+def goog_summarize_udf(text_col):
+
+    text_str = str(text_col)
+    chunks = textwrap.wrap(text_str, 6000)
+    text_result = []
+    chunk_list = [summarize_chunk_with_goog(t) for t in chunks]
+
+    print(chunk_list)
+    print(len(chunk_list))
+
+    return '\n '.join(chunk_list)

@@ -3,7 +3,7 @@
 
 ### Overview
 
-In this project, we will create a batch ETL processing pipeline that uses Azure Data Factory to extract text from PDF files and Chatgpt API to summarize the file. The processed data will then be stored in a Cosmos DB document database.
+In this project, we will create a batch ETL processing pipeline that uses Azure Data Factory to extract text from PDF files and Palm API to summarize the file. The processed data will then be stored in a Cosmos DB document database.
 
 ### Technologies and Skills
 
